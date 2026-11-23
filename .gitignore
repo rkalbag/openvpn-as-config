@@ -1,0 +1,8 @@
+data/
+*.env
+backups/
+out/
+__pycache__/
+tests/tmp/
+dist/
+.DS_Store

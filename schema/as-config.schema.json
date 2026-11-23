@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "as-config.schema.json",
+  "title": "Access Server configuration file (as-config.json), format 1",
+  "description": "Differences from a fresh Access Server, plus groups, users, Domain Routing rulesets and policies. String values may contain ${NAME} references to entries in `variables` or `secrets`; write $${ for a literal ${.",
+  "type": "object",
+  "required": [
+    "format",
+    "access_server_version",
+    "config"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": 1
+    },
+    "access_server_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+    },
+    "generated_by": {
+      "type": "string"
+    },
+    "config": {
+      "type": "object",
+      "required": [
+        "set",
+        "unset"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "set": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "unset": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "groups": {
+      "description": "Groups to create or update. Groups on the server that are missing from this map are kept (apply prints a warning) unless apply --prune-groups is given. The key __DEFAULT__ holds the user-defaults record; it is updated, never deleted.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/owner"
+      }
+    },
+    "users": {
+      "description": "Users to create or update. New local users get a random temporary password. Users missing from this map are kept unless apply --prune-users is given; superusers are never deleted.",
+      "type": "object",
+      "propertyNames": {
+        "not": {
+          "const": "__DEFAULT__"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/owner"
+      }
+    },
+    "rulesets": {
+      "description": "Domain Routing rulesets to create or update, by name. Rulesets on the server that are missing from this map are kept (and stay assigned) unless apply --prune-rulesets is given.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ruleset"
+      }
+    },
+    "policies": {
+      "description": "Policies to create or replace, matched by name. Policies on the server that are missing from this list are kept unless apply --prune-policies is given. Omit the key to leave policies alone.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/name"
+      },
+      "uniqueItems": true
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/name"
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "owner": {
+      "description": "User properties as sacli UserPropPut keys. access_to.N is written as the list access_to; rulesets lists Domain Routing rulesets by name, in priority order.",
+      "type": "object",
+      "properties": {
+        "access_to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rulesets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "propertyNames": {
+        "not": {
+          "pattern": "^(pvt_|type$|access_to\\.)"
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "ruleset": {
+      "type": "object",
+      "required": [
+        "rules"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "comment": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      }
+    },
+    "rule": {
+      "description": "One rule; its position is its index in the list plus one.",
+      "type": "object",
+      "required": [
+        "type",
+        "match_type",
+        "match_data",
+        "action"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "domain_routing",
+            "filter"
+          ]
+        },
+        "match_type": {
+          "enum": [
+            "domain",
+            "not_domain",
+            "subdomain",
+            "not_subdomain",
+            "domain_or_subdomain",
+            "not_domain_or_subdomain"
+          ]
+        },
+        "match_data": {
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "route",
+            "nat",
+            "deny",
+            "bypass"
+          ]
+        },
+        "comment": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

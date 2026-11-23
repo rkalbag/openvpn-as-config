@@ -1,0 +1,21 @@
+# Pinned to the tag behind `latest` on 2026-11-19:
+#   openvpn/openvpn-as:3.2.4-f3c295a7-Ubuntu26
+#   digest sha256:b5091b2b5dbebd302c1a61fe8154453e3ff84bd9df7894e530d45e22c76dcdf8
+x-as: &as
+  image: openvpn/openvpn-as:3.2.4-f3c295a7-Ubuntu26
+  devices: ["/dev/net/tun:/dev/net/tun"]
+  cap_add: [NET_ADMIN, MKNOD]
+  restart: "no"
+# Ports are bound to 127.0.0.1 so the test servers' admin UIs are not reachable from the network.
+
+services:
+  as-src:
+    <<: *as
+    container_name: as-src
+    ports: ["127.0.0.1:9431:943", "127.0.0.1:4431:443", "127.0.0.1:11941:1194/udp"]
+    volumes: ["./data/src:/openvpn"]
+  as-tgt:
+    <<: *as
+    container_name: as-tgt
+    ports: ["127.0.0.1:9432:943", "127.0.0.1:4432:443", "127.0.0.1:11942:1194/udp"]
+    volumes: ["./data/tgt:/openvpn"]
