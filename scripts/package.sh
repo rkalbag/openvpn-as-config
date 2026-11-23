@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Write dist/as-config-<version>.zip from the files git tracks, and nothing else.
+# Write dist/openvpn-as-config-<version>.zip from the files git tracks, and nothing else.
 # Working files (out/, tests/tmp/, data/, backups/, dist/) are excluded even if someone
 # force-adds them to git, because they can hold server secrets.
 set -euo pipefail
@@ -10,7 +10,7 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 VERSION=$(python3 as_config.py --version | awk '{print $2}')
-OUT="dist/as-config-$VERSION.zip"
+OUT="dist/openvpn-as-config-$VERSION.zip"
 
 FILES=()
 while IFS= read -r -d '' f; do
@@ -26,7 +26,7 @@ done < <(git ls-files -z)
 
 mkdir -p dist
 rm -f "$OUT"
-python3 - "$OUT" "as-config-$VERSION" "${FILES[@]}" <<'PY'
+python3 - "$OUT" "openvpn-as-config-$VERSION" "${FILES[@]}" <<'PY'
 import os, sys, zipfile
 out, prefix, files = sys.argv[1], sys.argv[2], sys.argv[3:]
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:

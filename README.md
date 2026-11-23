@@ -1,4 +1,6 @@
-# as-config
+# openvpn-as-config
+
+Community tool, not an official OpenVPN Inc. product.
 
 Configure an OpenVPN Access Server once in the Admin Web UI, capture the result as a small file, and apply it to any new Access Server after it boots: on a VM, in a container, from CI or from a cloud run-command service.
 
@@ -173,7 +175,7 @@ Never exported, never written by `apply`, and flagged by `validate`; the target 
 ## Packaging
 
 ```sh
-./scripts/package.sh        # -> dist/as-config-<version>.zip
+./scripts/package.sh        # -> dist/openvpn-as-config-<version>.zip
 ```
 
 The archive holds only files tracked by git. Working directories that can contain server secrets (`out/`, `tests/tmp/`, `data/`, `backups/`, `dist/`) are skipped even if they were force-added. The script refuses to run outside a git repository, and refuses tracked symlinks (which could pull any file on the machine into the archive).

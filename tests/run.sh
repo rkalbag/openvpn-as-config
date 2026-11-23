@@ -423,11 +423,13 @@ mkdir -p "$P/tests" && cp tests/run.sh "$P/tests/"
   && git add -f out/leak.txt tests/tmp/leak.txt data/leak.txt backups/leak.txt)
 (cd "$P" && ./scripts/package.sh) > "$W/package.out" 2>&1
 check "package.sh exit 0" test $? -eq 0
-ZIP=$(ls "$P"/dist/as-config-*.zip 2>/dev/null | head -1)
+ZIP=$(ls "$P"/dist/openvpn-as-config-*.zip 2>/dev/null | head -1)
+check "package is named dist/openvpn-as-config-<version>.zip" bash -c "[ -n \"$ZIP\" ] && [ \"\$(basename \"$ZIP\")\" = openvpn-as-config-\$(python3 as_config.py --version | awk '{print \$2}').zip ]"
 check "zip contains the deliverables and nothing under out/, tests/tmp/, data/ or backups/" pyassert "$ZIP" <<'EOF'
 import sys, zipfile
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 rel = [n.split("/", 1)[1] for n in names]
+if not all(n.startswith("openvpn-as-config-") for n in names): print("    wrong top folder"); sys.exit(1)
 bad = [n for n in rel if n.startswith(("out/", "tests/tmp/", "data/", "backups/", "dist/"))]
 need = {"as_config.py", "README.md", "FINDINGS.md", "schema/as-config.schema.json", "docker-compose.yml",
         "scripts/reset.sh", "scripts/package.sh", "tests/run.sh"}
@@ -588,6 +590,11 @@ RC=$?
 check "package.sh refuses a tracked symlink" bash -c "[ $RC -eq 1 ] && grep -q 'linked.md is a symlink' $W/package-symlink.out"
 
 check "test containers publish ports on 127.0.0.1 only" bash -c "docker port as-src | grep -v '^.*-> 127.0.0.1:' | grep -q . && exit 1; docker port as-tgt | grep -v '^.*-> 127.0.0.1:' | grep -q . && exit 1; exit 0"
+
+# ---------------------------------------------------------------------------
+echo "== 19. community disclaimer"
+check "README.md title is openvpn-as-config" bash -c "[ \"\$(head -1 README.md)\" = '# openvpn-as-config' ]"
+check "README.md has the community disclaimer under the title" bash -c "[ \"\$(sed -n 3p README.md)\" = 'Community tool, not an official OpenVPN Inc. product.' ]"
 
 echo
 echo "passed: $PASS  failed: $FAIL"
