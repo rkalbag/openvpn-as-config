@@ -4,7 +4,7 @@ Community tool, not an official OpenVPN Inc. product.
 
 Configure an OpenVPN Access Server once in the Admin Web UI, capture the result as a small file, and apply it to any new Access Server after it boots: on a VM, in a container, from CI or from a cloud run-command service.
 
-`as_config.py` is a single Python 3 file. It uses only the standard library and `sacli`, and runs as root on the Access Server itself. Tested against Access Server 3.2.4 (`openvpn/openvpn-as:3.2.4-f3c295a7-Ubuntu26`); the evidence for every design choice is in [FINDINGS.md](FINDINGS.md).
+`as_config.py` is a single Python 3 file. It uses only the standard library and `sacli`, and runs as root on the Access Server itself. Tested against Access Server 3.2.4 (`openvpn/openvpn-as:3.2.4-f3c295a7-Ubuntu26`).
 
 ## How it fits
 

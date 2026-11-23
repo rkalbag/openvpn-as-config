@@ -32,7 +32,7 @@ sys.path.insert(0, ".")
 import as_config as t
 def load(p, part): return json.load(open(f"{p}.{part}.json"))
 def users(p): return {k: v for k, v in load(p, "users").items()}
-def config(p): return t.unprotected(load(p, "config"))   # protected keys drift on their own (Q6)
+def config(p): return t.unprotected(load(p, "config"))   # protected keys drift on their own
 def rs(p): return sorted((r["name"], r["comment"], r["owner"], r["position"]) for r in (load(p, "rulesets") or []))
 diff = []
 if config(a) != config(b): diff.append("config")
@@ -152,7 +152,7 @@ want = {"vpn.client.routing.reroute_dns": "false", "vpn.server.routing.private_a
 for k, v in want.items():
     if a.get(k) != v: problems.append((k, a.get(k)))
 if "admin_ui.https.ip_address" in a: problems.append("unset key still present")
-for k in b:   # subscription.* changes on its own (Q6), so it cannot be compared
+for k in b:   # subscription.* changes on its own, so it cannot be compared
     if t.is_protected(k) and not k.startswith("subscription.") and a.get(k) != b[k]: problems.append(("protected changed", k))
 others = {k for k in set(a) | set(b) if k not in want and k != "admin_ui.https.ip_address" and not t.is_protected(k) and a.get(k) != b.get(k)}
 if others: problems.append(("unexpected config changes", others))
@@ -308,7 +308,7 @@ echo '{"format": 1, "access_server_version": "3.2.4", "config": {"set": {}, "uns
 check "unassigned ruleset rejected by validate" bash -c "! python3 as_config.py validate $W/bad3.json --offline >/dev/null"
 
 # ---------------------------------------------------------------------------
-# Phase 4. The target is fresh again after scenario 9.
+# The target is fresh again after scenario 9.
 echo "== 11. items the file does not mention are kept without a prune flag"
 tool_tgt apply /root/as-config.json --values /root/staging.env > "$W/apply11a.out" 2>&1
 check "base file applied" test $? -eq 0
@@ -416,7 +416,7 @@ EOF
 
 echo "== 16. package contains only tracked deliverables"
 P="$W/pkgrepo"; mkdir -p "$P"
-cp -R as_config.py README.md FINDINGS.md CLAUDE.md docker-compose.yml .gitignore schema scripts "$P/"
+cp -R as_config.py README.md LICENSE docker-compose.yml .gitignore schema scripts "$P/"
 mkdir -p "$P/tests" && cp tests/run.sh "$P/tests/"
 (cd "$P" && git init -q && git add -A \
   && mkdir -p out tests/tmp data backups && for d in out tests/tmp data backups; do echo secret > "$d/leak.txt"; done \
@@ -431,7 +431,7 @@ names = zipfile.ZipFile(sys.argv[1]).namelist()
 rel = [n.split("/", 1)[1] for n in names]
 if not all(n.startswith("openvpn-as-config-") for n in names): print("    wrong top folder"); sys.exit(1)
 bad = [n for n in rel if n.startswith(("out/", "tests/tmp/", "data/", "backups/", "dist/"))]
-need = {"as_config.py", "README.md", "FINDINGS.md", "schema/as-config.schema.json", "docker-compose.yml",
+need = {"as_config.py", "README.md", "LICENSE", "schema/as-config.schema.json", "docker-compose.yml",
         "scripts/reset.sh", "scripts/package.sh", "tests/run.sh"}
 if bad or not need <= set(rel): print("    bad:", bad, "missing:", need - set(rel))
 sys.exit(0 if not bad and need <= set(rel) else 1)

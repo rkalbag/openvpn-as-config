@@ -10,8 +10,6 @@ Commands:
   validate FILE [--values staging.env]         check a file without changing anything
   apply FILE --values staging.env [--dry-run]  apply a file to this server
   rollback BACKUP_DIR                          restore a backup taken by apply
-
-Findings behind the design are in FINDINGS.md next to this file.
 """
 
 # Security check first, before any other import: Python searches the script's own directory for
@@ -50,7 +48,7 @@ DEFAULT_STATE_DIR = "/var/lib/as-config"
 SACLI_CANDIDATES = ("/usr/local/openvpn_as/scripts/sacli", "sacli")
 
 # --------------------------------------------------------------------------
-# Keys and properties the tool never exports or writes (FINDINGS.md, Q5/Q6).
+# Keys and properties the tool never exports or writes (server-specific, or change on their own).
 # --------------------------------------------------------------------------
 PROTECTED_EXACT = {
     "host.name",
@@ -72,7 +70,7 @@ PROTECTED_PREFIXES = (
     "cluster.",
     "dbpush.",
 )
-# Keys ConfigReplace re-inserts when they are missing (Q3). Unsetting them cannot work.
+# Keys ConfigReplace re-inserts when they are missing. Unsetting them cannot work.
 REINSERTED = {
     "auth.local.0.enable",
     "auth.module.type",
@@ -81,7 +79,7 @@ REINSERTED = {
     "upgrade.initial_version",
     "vpn.server.tls_cc_security",
 }
-# Last key segment that marks a value as a secret (decision 3). Anchored at the end so that
+# Last key segment that marks a value as a secret. Anchored at the end so that
 # settings such as acme.api_key_algorithm or names containing "bypass" are not caught.
 SECRET_SEGMENT = re.compile(r"(^|_)(pass|passwd|password|passphrase|pw|pwd|secret|secretkey|token|key|credentials?)$", re.I)
 
@@ -199,7 +197,7 @@ REDACT = set()   # secret values that must never be printed (filled by apply and
 
 def redact(text):
     """Replace every known secret value in text with <secret>. Server error messages can echo
-    the values they reject (FINDINGS Q4), so all output goes through here."""
+    the values they reject, so all output goes through here."""
     text = str(text)
     for value in sorted(REDACT, key=len, reverse=True):
         text = text.replace(value, "<secret>")
@@ -296,7 +294,7 @@ def secret_var_name(key):
 
 def unprotected(cfg):
     """Config without protected keys. Protected keys such as subscription.saved_state change on
-    their own (Q6), so they are never compared, written back or restored."""
+    their own, so they are never compared, written back or restored."""
     return {k: v for k, v in cfg.items() if not is_protected(k)}
 
 
@@ -324,7 +322,7 @@ def mask(key, value, secret_keys=()):
 # sacli
 # --------------------------------------------------------------------------
 class Sacli:
-    """Runs sacli. Options always go before the command (FINDINGS.md: option order)."""
+    """Runs sacli. Options always go before the command (sacli rejects them after it)."""
 
     def __init__(self, path=None):
         self.path = path or next((p for p in SACLI_CANDIDATES if shutil.which(p)), None)
@@ -338,7 +336,7 @@ class Sacli:
         args.append(command)
         p = subprocess.run(args, capture_output=True, text=True)
         out = p.stdout
-        # Several commands report argument errors with exit code 0 (Q9, Q11).
+        # Several commands report argument errors with exit code 0.
         soft_error = re.search(r"^ERROR:|needs? to be specified", out + p.stderr, re.M)
         if check and (p.returncode != 0 or soft_error):
             shown = {k: ("<hidden>" if k in ("new_pass", "value") else v) for k, v in opts.items()}
@@ -362,7 +360,7 @@ class Sacli:
 
 
 def first_json(text):
-    """Parse the first JSON value in text (sacli start prints text around its JSON, Q2)."""
+    """Parse the first JSON value in text (sacli start prints text around its JSON)."""
     stripped = text.strip()
     if stripped in ("None", ""):
         return None
@@ -405,7 +403,7 @@ def owner_props(state):
 
 
 def read_rulesets(sacli):
-    """Return (rulesets by id, links by owner). Only rulesets attached to an owner are visible (Q9)."""
+    """Return (rulesets by id, links by owner). Only rulesets attached to an owner are visible."""
     rows = sacli.json("AccessControlRulesetsList") or []
     rulesets, links = {}, {}
     for r in rows:
@@ -808,7 +806,7 @@ class Plan:
         self.links = []             # (owner, [names])
         self.expected_links = {}    # owner -> [names] after apply
         self.new_local_users = []
-        self.created_rulesets = []  # ids created by execute(); unassigned ones are invisible to restore (Q9)
+        self.created_rulesets = []  # ids created by execute(); unassigned ones are invisible to restore
 
     @property
     def empty(self):
