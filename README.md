@@ -4,14 +4,69 @@ Community tool, not an official OpenVPN Inc. product.
 
 Configure an OpenVPN Access Server once in the Admin Web UI, capture the result as a small file, and apply it to any new Access Server after it boots: on a VM, in a container, from CI or from a cloud run-command service.
 
-`as_config.py` is a single Python 3 file. It uses only the standard library and `sacli`, and runs as root on the Access Server itself. Tested against Access Server 3.2.4 (`openvpn/openvpn-as:3.2.4-f3c295a7-Ubuntu26`).
+`as_config.py` is a single Python 3 file. It uses only the standard library and `sacli`, and runs as root on the Access Server itself. The server can be built any way you like (Marketplace image, ARM, CloudFormation, Terraform, a container); the tool only handles its configuration.
 
-## How it fits
+## What it copies
 
-1. Start a fresh server and take a **baseline** before touching it.
-2. Configure it in the Admin Web UI.
-3. **Export** the differences to `as-config.json`. Replace environment-specific values with `${VARIABLES}` and commit the file.
-4. For each new server, built by any template (Marketplace, ARM, CloudFormation, Terraform), **apply** the file with a values file for that environment.
+| Copied | Not copied |
+|---|---|
+| Configuration settings changed from the defaults (`sacli ConfigQuery` keys) | Server-specific keys: hostname, license, cluster role and the others under [Protected keys](#protected-keys) |
+| Groups and their properties, including access rules and auto-login | Passwords (new users get random temporary ones) |
+| Individual users and their properties | MFA (TOTP) enrolment |
+| Domain Routing rulesets and their assignments | Web and user certificates (each server has its own CA) |
+| Policies | |
+
+## Requirements
+
+- Access Server with `sacli`. Tested with Access Server 3.2.4 (`openvpn/openvpn-as:3.2.4-f3c295a7-Ubuntu26`). The source and target must run the same version unless you pass `--force-version`.
+- `python3` on the server, which the tool uses as it finds it (the Access Server 3.2.4 container image ships Python 3.14). No packages to install.
+- Root on the server: `sudo` on a VM, or `docker exec`, which runs as root by default.
+
+## Quick start
+
+The examples run the tool from `~/as-config`, a private directory on the server; [Copy and run](#copy-and-run) shows how to copy it there.
+
+**1. Take a baseline of a fresh server, before configuring it.** On the source server:
+
+```sh
+sudo python3 -I ~/as-config/as_config.py baseline -o ~/as-config/baseline.json
+```
+
+**2. Configure the server in the Admin Web UI** as you want every server to be.
+
+**3. Export the differences.** On the same server:
+
+```sh
+sudo python3 -I ~/as-config/as_config.py export --baseline ~/as-config/baseline.json -o ~/as-config/as-config.json
+```
+
+`export` prints notes for values that look environment-specific, such as subnets and IP addresses, and lists the secret names it created. Copy `as-config.json` off the server, then edit it:
+
+- Replace environment-specific values with `${NAME}`, and list each name under `variables`.
+- Secret values (LDAP bind passwords, RADIUS shared secrets and so on) are already written as `${AS_SECRET_…}` and listed under `secrets`.
+
+Keep `as-config.json` in version control. Keep `baseline.json` private and out of version control (see [Commands](#commands)).
+
+**4. Write a values file for each environment**, for example `staging.env`:
+
+```sh
+# NAME=VALUE, one per line; quotes are optional
+APP_SUBNET=10.20.0.0/16
+```
+
+Secrets do not go in this file. They are read from environment variables when you run `apply`.
+
+**5. Check the file**, on any machine with Python 3:
+
+```sh
+python3 as_config.py validate as-config.json --values staging.env --offline
+```
+
+**6. Apply it to each new server**: see [Copy and run](#copy-and-run). Run with `--dry-run` first to see the planned changes.
+
+### Starting from a server that is already configured
+
+If you have no baseline from before the server was configured, take one from a fresh server of the same Access Server version, such as a temporary container of the same image tag, and run `export` against it on the configured server. Two fresh servers of the same version differ only in [protected keys](#protected-keys), which `export` skips, so the result should be the same. This route has not been tested yet: read the exported file before using it.
 
 ## Copy and run
 
@@ -22,21 +77,40 @@ Over SSH, on a VM:
 ```sh
 ssh admin@vpn.example.com 'install -d -m 700 ~/as-config'
 scp as_config.py as-config.json staging.env admin@vpn.example.com:as-config/
+ssh admin@vpn.example.com 'sudo python3 -I ~/as-config/as_config.py apply ~/as-config/as-config.json --values ~/as-config/staging.env --dry-run'
 ssh admin@vpn.example.com 'sudo python3 -I ~/as-config/as_config.py apply ~/as-config/as-config.json --values ~/as-config/staging.env'
 ```
 
 Use a private directory, never `/tmp`: Python loads modules from the script's own directory, so as root a file planted next to the tool would run as root. The tool refuses to run as root from a directory other users can write to; `python3 -I` adds a second layer of protection.
 
-In Docker:
+If the file lists `secrets`, pass them as environment variables. `sudo` clears the environment by default, so name each variable with `--preserve-env`. Typing each value at a prompt keeps it out of shell history and process lists:
+
+```sh
+ssh -t admin@vpn.example.com
+read -rs AS_SECRET_AUTH_LDAP_0_BIND_PW && export AS_SECRET_AUTH_LDAP_0_BIND_PW
+sudo --preserve-env=AS_SECRET_AUTH_LDAP_0_BIND_PW \
+  python3 -I ~/as-config/as_config.py apply ~/as-config/as-config.json --values ~/as-config/staging.env
+```
+
+In Docker (the container is called `openvpn-as` here):
 
 ```sh
 docker cp as_config.py      openvpn-as:/root/
 docker cp as-config.json    openvpn-as:/root/
 docker cp staging.env       openvpn-as:/root/
-docker exec openvpn-as python3 /root/as_config.py apply /root/as-config.json --values /root/staging.env
+docker exec openvpn-as python3 -I /root/as_config.py apply /root/as-config.json --values /root/staging.env --dry-run
+docker exec openvpn-as python3 -I /root/as_config.py apply /root/as-config.json --values /root/staging.env
 ```
 
-Terraform users run the same command from a provisioner or the cloud's run-command service; there is no separate module.
+For secrets, set them in your shell and pass each name with `-e NAME`. With no `=value`, Docker copies the value from your environment, so it is not on the command line:
+
+```sh
+docker exec -e AS_SECRET_AUTH_LDAP_0_BIND_PW openvpn-as python3 -I /root/as_config.py apply /root/as-config.json --values /root/staging.env
+```
+
+`apply` stops before changing anything if a secret is missing (`secrets missing from the environment: …`).
+
+Terraform users run the same commands from a provisioner or the cloud's run-command service; there is no separate module.
 
 ## Commands
 
@@ -172,17 +246,11 @@ Never exported, never written by `apply`, and flagged by `validate`; the target 
 - **The state directory must be private.** `--state-dir` (default `/var/lib/as-config`) and any directory given to `rollback` must be root-owned, mode 700, not a symlink, and not inside a directory anyone can write to; otherwise the tool refuses. Files there are written without following symlinks, and `-o` output files are replaced atomically, so a planted link cannot redirect a write.
 - **`sacli`** is taken from `/usr/local/openvpn_as/scripts/sacli` when it exists, and from `PATH` only otherwise.
 
-## Packaging
+## Development
 
-```sh
-./scripts/package.sh        # -> dist/openvpn-as-config-<version>.zip
-```
+The files besides `as_config.py` are for working on the tool; you do not need them to use it.
 
-The archive holds only files tracked by git. Working directories that can contain server secrets (`out/`, `tests/tmp/`, `data/`, `backups/`, `dist/`) are skipped even if they were force-added. The script refuses to run outside a git repository, and refuses tracked symlinks (which could pull any file on the machine into the archive).
-
-The test containers in `docker-compose.yml` publish their ports on `127.0.0.1` only, so their admin UIs are not reachable from the network.
-
-## Testing
+### Testing
 
 `tests/run.sh` resets two local Access Server containers (`docker-compose.yml`, `scripts/reset.sh`) and runs the end-to-end tests: export, apply, re-apply without changes, removals, automatic rollback on an injected failure, version mismatch, dry run, the rollback command, input refusals, keep-by-default and prune flags, policy merging, secrets kept off the command line, package contents, and the security checks (planted modules, symlinked outputs, unsafe state directories, secrets in error messages, backup retention, symlinks in packages). It takes about a minute and a half after the image is pulled.
 
@@ -190,3 +258,13 @@ The test containers in `docker-compose.yml` publish their ports on `127.0.0.1` o
 docker compose pull
 ./tests/run.sh
 ```
+
+The test containers in `docker-compose.yml` publish their ports on `127.0.0.1` only, so their admin UIs are not reachable from the network.
+
+### Packaging
+
+```sh
+./scripts/package.sh        # -> dist/openvpn-as-config-<version>.zip
+```
+
+The archive holds only files tracked by git. Working directories that can contain server secrets (`out/`, `tests/tmp/`, `data/`, `backups/`, `dist/`) are skipped even if they were force-added. The script refuses to run outside a git repository, and refuses tracked symlinks (which could pull any file on the machine into the archive).
